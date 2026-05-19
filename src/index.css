@@ -1,0 +1,164 @@
+:root {
+  --bg: #080808;
+  --bg1: #0e0e0e;
+  --bg2: #141414;
+  --bg3: #1a1a1a;
+  --line: #222222;
+  --line2: #2a2a2a;
+  --t1: #f0f0f0;
+  --t2: #888888;
+  --t3: #444444;
+  --t4: #2a2a2a;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--t1);
+  font-size: 12.5px;
+  line-height: 1.75;
+  overflow: hidden;
+}
+
+/* Hide scrollbars */
+::-webkit-scrollbar {
+  display: none;
+}
+
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 500;
+  color: var(--t1);
+}
+
+.eyebrow {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--t3);
+}
+
+.label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--t3);
+}
+
+/* Buttons */
+.btn {
+  background: var(--bg2);
+  border: 1px solid var(--line);
+  color: var(--t1);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 8px 16px;
+  cursor: pointer;
+  border-radius: 0;
+  transition: all 0.15s ease;
+}
+
+.btn:hover {
+  background: var(--bg3);
+  border-color: var(--line2);
+  color: var(--t1);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--t1);
+  border: 1px solid var(--t1);
+  color: var(--bg);
+}
+
+.btn-primary:hover {
+  background: var(--bg);
+  border-color: var(--t1);
+  color: var(--t1);
+}
+
+/* Inputs */
+.input {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--t1);
+  font-size: 12.5px;
+  padding: 8px 12px;
+  border-radius: 0;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.input:focus {
+  border-color: var(--line2);
+}
+
+.input::placeholder {
+  color: var(--t4);
+}
+
+.textarea {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--t1);
+  font-size: 12.5px;
+  padding: 8px 12px;
+  border-radius: 0;
+  width: 100%;
+  outline: none;
+  resize: none;
+  transition: border-color 0.15s ease;
+  font-family: inherit;
+}
+
+.textarea:focus {
+  border-color: var(--line2);
+}
+
+.textarea::placeholder {
+  color: var(--t4);
+}
+
+/* Card */
+.card {
+  background: var(--bg1);
+  border: 1px solid var(--line);
+  padding: 16px;
+}
+
+/* Chip */
+.chip {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--t3);
+  font-size: 11px;
+  padding: 6px 13px;
+  cursor: pointer;
+  border-radius: 0;
+  transition: all 0.15s ease;
+}
+
+.chip:hover {
+  border-color: var(--line2);
+  color: var(--t2);
+}
