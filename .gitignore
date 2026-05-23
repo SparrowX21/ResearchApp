@@ -1,4 +1,18 @@
 node_modules/
 dist/
-.env
 .DS_Store
+
+# Environment variables — NEVER commit real secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+.env.*
+!.env.example
+
+# Firebase / cloud service account keys
+*-firebase-adminsdk-*.json
+serviceAccount*.json
+*.pem

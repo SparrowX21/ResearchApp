@@ -81,7 +81,9 @@ Open **http://localhost:3000**
 
 ### Environment variables
 
-Copy `.env.example` to `.env` and fill in:
+Copy `.env.example` to `.env` and fill in your keys locally:
+
+> **Security:** Only `.env.example` (placeholders) belongs in git. Your real `.env` file is gitignored—never commit API keys, Firebase config, or Supabase credentials to GitHub.
 
 ```env
 # Firebase (Google sign-in)

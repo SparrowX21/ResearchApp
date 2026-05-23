@@ -48,7 +48,7 @@ Without this step, the app still works but saves data to **local backup** only.
 
 ```bash
 cp .env.example .env
-# fill in your keys
+# fill in your keys in .env only — this file is gitignored and must not be committed
 npm install
 npm run dev
 ```
