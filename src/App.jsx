@@ -1,13 +1,16 @@
 import React from 'react';
 import PassportApp from './passport/PassportApp';
-import HomePage from './components/HomePage';
 import { useAuth } from './contexts/AuthContext';
 
 function App() {
-  const { currentUser } = useAuth();
+  const { currentUser, loading } = useAuth();
+
+  if (loading) {
+    return <div style={{ color: 'white', padding: '20px' }}>Loading...</div>;
+  }
 
   if (!currentUser) {
-    return <HomePage />;
+    return <div style={{ color: 'white', padding: '20px' }}>No user found</div>;
   }
 
   return <PassportApp />;

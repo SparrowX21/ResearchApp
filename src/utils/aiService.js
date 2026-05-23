@@ -2,6 +2,9 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 
+console.log('Gemini API Key loaded:', GEMINI_API_KEY ? 'Yes' : 'No');
+console.log('API Key length:', GEMINI_API_KEY.length);
+
 // ─── FORMATTING RULES (appended to every prompt) ───────────────────────────
 const SYSTEM_PROMPTS = {
   thesis: `You are a thesis writing coach for high school students. Your goal is to help them develop strong, arguable thesis statements.
@@ -51,7 +54,11 @@ const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 export async function callAI(stage, userMessage, conversationHistory = []) {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+    if (!GEMINI_API_KEY) {
+      throw new Error('Gemini API key is missing. Please check your .env file.');
+    }
+
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' });
     
     let fullPrompt = SYSTEM_PROMPTS[stage] + '\n\n';
     
@@ -68,7 +75,10 @@ export async function callAI(stage, userMessage, conversationHistory = []) {
     return response.text();
   } catch (error) {
     console.error('AI API Error:', error);
-    throw new Error('Failed to get AI response. Please try again.');
+    if (error.message.includes('API key')) {
+      throw new Error('Invalid API key. Please check your Gemini API configuration.');
+    }
+    throw new Error('Failed to get AI response: ' + error.message);
   }
 }
 
@@ -90,7 +100,7 @@ Provide your evaluation in this exact JSON format:
 }`;
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' });
     const fullPrompt = SYSTEM_PROMPTS.thesis + '\n\n' + prompt;
     const result = await model.generateContent(fullPrompt);
     const response = await result.response;
@@ -129,7 +139,7 @@ Rate it on a scale of 1-10 for credibility and provide feedback. Return in JSON 
 }`;
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' });
     const fullPrompt = SYSTEM_PROMPTS.sources + '\n\n' + prompt;
     const result = await model.generateContent(fullPrompt);
     const response = await result.response;
@@ -169,7 +179,7 @@ Return in JSON format:
 }`;
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' });
     const fullPrompt = SYSTEM_PROMPTS.drafting + '\n\n' + prompt;
     const result = await model.generateContent(fullPrompt);
     const response = await result.response;
@@ -213,7 +223,7 @@ Return in JSON format:
 }`;
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' });
     const fullPrompt = SYSTEM_PROMPTS.revision + '\n\n' + prompt;
     const result = await model.generateContent(fullPrompt);
     const response = await result.response;
@@ -233,5 +243,79 @@ Return in JSON format:
       introConclusion: { score: 5, feedback: 'Could not evaluate.', suggestions: [] },
       citations: { score: 5, feedback: 'Could not evaluate.', suggestions: [] }
     };
+  }
+}
+
+export function formatCitation(source) {
+  // Simple citation formatter - can be enhanced with AI
+  const { author, title, publicationDate, url } = source;
+  return `${author}. "${title}". ${publicationDate}. ${url}`;
+}
+
+export function getSmartTip(stage) {
+  const tips = {
+    topic: "Start with a broad subject area, then narrow down to something specific and arguable.",
+    thesis: "A good thesis takes a position and can be supported with evidence.",
+    planning: "Break your research into manageable steps with clear deadlines.",
+    sources: "Look for peer-reviewed sources from academic journals and reputable institutions.",
+    outline: "Organize your main points logically to build a strong argument.",
+    drafting: "Write your first draft without worrying about perfection - focus on getting ideas down.",
+    revision: "Let your draft sit for a day before revising with fresh eyes."
+  };
+  return tips[stage] || "Keep going! You're making progress.";
+}
+
+export async function evaluateProfile(studentData) {
+  const prompt = `Evaluate this student's college readiness profile:
+
+Name: ${studentData.name || 'Student'}
+Grade: ${studentData.grade || 'Not specified'}
+School: ${studentData.school || 'Not specified'}
+GPA: ${studentData.gpa || 'Not specified'}
+Target Major: ${studentData.targetMajor || 'Not specified'}
+Skills: ${(studentData.skills || []).map(s => `${s.name} (${s.proficiency})`).join(', ')}
+Projects: ${studentData.projects?.length || 0} projects
+Extracurriculars: ${studentData.extracurriculars?.length || 0} activities
+Competitions: ${studentData.competitions || 0} competitions
+Achievements: ${studentData.achievements || 0} achievements
+Bio: ${studentData.bio || 'Not provided'}
+
+Evaluate the profile on a scale of 1-100 for:
+1. Skills (25 points max)
+2. Projects (20 points max)
+3. Extracurriculars (20 points max)
+4. Competitions (15 points max)
+5. Achievements (10 points max)
+6. Profile Completeness (10 points max)
+
+Provide your evaluation in this exact JSON format:
+{
+  "skills": {"score": number, "max": 25, "details": "string"},
+  "projects": {"score": number, "max": 20, "details": "string"},
+  "extracurriculars": {"score": number, "max": 20, "details": "string"},
+  "competitions": {"score": number, "max": 15, "details": "string"},
+  "achievements": {"score": number, "max": 10, "details": "string"},
+  "completeness": {"score": number, "max": 10, "details": "string"},
+  "totalScore": number,
+  "grade": "string",
+  "insights": ["string"],
+  "recommendations": ["string"]
+}`;
+
+  try {
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite-preview' });
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    throw new Error('Could not parse AI response');
+  } catch (error) {
+    console.error('Profile evaluation error:', error);
+    // Fallback to heuristic calculation if AI fails
+    return null;
   }
 }

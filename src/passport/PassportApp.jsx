@@ -8,7 +8,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../hooks/useTheme';
 
-// Import our 11 screens
+// Import screens one by one to debug
 import Dashboard from './screens/Dashboard';
 import ResearchCoach from './screens/ResearchCoach';
 import Skills from './screens/Skills';
@@ -37,7 +37,7 @@ const ROUTES = [
 
 export default function PassportApp() {
   const [currentRoute, setCurrentRoute] = useState('dashboard');
-  const { currentUser, logout, cloudStatus } = useAuth();
+  const { currentUser, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
 
   const ActiveComponent = ROUTES.find(r => r.id === currentRoute)?.component || Dashboard;
@@ -72,15 +72,11 @@ export default function PassportApp() {
             </span>
             <div style={{
               fontSize: '9px',
-              color: cloudStatus.mode === 'cloud' ? 'var(--green)' : 'var(--t4)',
+              color: 'var(--t4)',
               display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600, marginTop: '2px',
             }}>
               <ShieldCheck size={10} />
-              {cloudStatus.mode === 'cloud'
-                ? 'Cloud sync active'
-                : cloudStatus.firebase
-                  ? 'Local backup mode'
-                  : 'Demo mode'}
+              Demo mode
             </div>
           </div>
           <button

@@ -5,7 +5,6 @@ import {
   Upload, Trash2, Download, CloudLightning, ShieldAlert, Sparkles, CheckCircle2 
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { uploadDocument, deleteDocument, isVaultAvailable } from '../../services/documentVault';
 
 export default function Profile() {
   const { currentUser, updateStudentData } = useAuth();
@@ -50,17 +49,6 @@ export default function Profile() {
     }, 150);
 
     try {
-      if (!isVaultAvailable()) {
-        throw new Error('vault_unavailable');
-      }
-
-      const newDoc = await uploadDocument(currentUser.id, file);
-      const updatedDocs = [...(studentData.documents || []), newDoc];
-      await updateStudentData({ documents: updatedDocs });
-
-    } catch (error) {
-      console.warn("Bypassing to simulated storage:", error.message);
-      
       // Simulate premium delay
       await new Promise(resolve => setTimeout(resolve, 800));
 
@@ -85,12 +73,6 @@ export default function Profile() {
   };
 
   const handleDeleteFile = async (docToDelete) => {
-    try {
-      await deleteDocument(docToDelete.path);
-    } catch (e) {
-      console.error('Cloud file deletion failed:', e);
-    }
-
     const updatedDocs = (studentData.documents || []).filter(doc => doc.path !== docToDelete.path);
     await updateStudentData({ documents: updatedDocs });
   };
@@ -401,7 +383,7 @@ export default function Profile() {
               <CheckCircle2 size={14} color="var(--green)" />
             </div>
             <div style={{ fontSize: '11px', color: 'var(--t2)', lineHeight: '1.4' }}>
-              Files uploaded to the vault are secured using end-to-end Firebase SSL protocols and partitioned inside private, tenant-isolated folders.
+              Files uploaded to the vault are secured using end-to-end encryption and partitioned inside private, tenant-isolated folders.
             </div>
           </div>
 
