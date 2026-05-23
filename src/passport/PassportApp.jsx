@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Home, Award, Layers, CheckCircle, BookOpen, 
-  Briefcase, Users, Lightbulb, Compass, User, Sparkles, LogOut, ShieldCheck
+  Briefcase, Users, Lightbulb, Compass, User, Sparkles, LogOut, ShieldCheck,
+  Sun, Moon
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../hooks/useTheme';
 
 // Import our 11 screens
 import Dashboard from './screens/Dashboard';
@@ -35,7 +37,8 @@ const ROUTES = [
 
 export default function PassportApp() {
   const [currentRoute, setCurrentRoute] = useState('dashboard');
-  const { currentUser, logout } = useAuth();
+  const { currentUser, logout, cloudStatus } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   const ActiveComponent = ROUTES.find(r => r.id === currentRoute)?.component || Dashboard;
 
@@ -44,31 +47,51 @@ export default function PassportApp() {
       
       {/* Sidebar Navigation */}
       <div style={{ 
-        width: '240px', background: 'var(--bg1)', borderRight: '1px solid var(--line)',
+        width: '248px', background: 'var(--bg1)', borderRight: '1px solid var(--line)',
         display: 'flex', flexDirection: 'column', height: '100%', flexShrink: 0
       }}>
         
         {/* Brand Header */}
         <div style={{ 
-          padding: '24px 20px', 
+          padding: '20px 18px', 
           display: 'flex', 
           alignItems: 'center', 
-          gap: '10px',
+          gap: '12px',
           borderBottom: '1px solid var(--line)'
         }}>
           <div style={{
-            width: '28px', height: '28px', background: 'var(--accent)', borderRadius: '6px',
+            width: '32px', height: '32px', background: 'linear-gradient(135deg, var(--accent), var(--accent-light))',
+            borderRadius: 'var(--radius-sm)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: '14px', color: '#fff', fontWeight: 800,
+            boxShadow: '0 4px 12px var(--accent-dim)',
           }}>E</div>
-          <div>
-            <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--t1)', letterSpacing: '0.5px' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--t1)', letterSpacing: '-0.02em' }}>
               EduSuite<span style={{ color: 'var(--accent-light)' }}>.ai</span>
             </span>
-            <div style={{ fontSize: '9px', color: 'var(--green)', display: 'flex', alignItems: 'center', gap: '3px', fontWeight: 600 }}>
-              <ShieldCheck size={10} /> Active Secure Sync
+            <div style={{
+              fontSize: '9px',
+              color: cloudStatus.mode === 'cloud' ? 'var(--green)' : 'var(--t4)',
+              display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600, marginTop: '2px',
+            }}>
+              <ShieldCheck size={10} />
+              {cloudStatus.mode === 'cloud'
+                ? 'Cloud sync active'
+                : cloudStatus.firebase
+                  ? 'Local backup mode'
+                  : 'Demo mode'}
             </div>
           </div>
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={toggleTheme}
+            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+          >
+            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+          </button>
         </div>
 
         {/* Scrollable Navigation */}
@@ -84,10 +107,10 @@ export default function PassportApp() {
             // Accent highlight specifically for Research Coach
             const isResearch = route.id === 'research';
             const activeBg = isResearch
-              ? 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(99,102,241,0.05))'
-              : 'rgba(37,99,235,0.08)';
-            const activeBorder = isResearch ? 'rgba(99,102,241,0.4)' : 'rgba(37,99,235,0.3)';
-            const activeColor = isResearch ? 'var(--accent-light)' : '#60a5fa';
+              ? 'var(--accent-dim)'
+              : 'var(--accent-dim)';
+            const activeBorder = isResearch ? 'rgba(99,102,241,0.35)' : 'rgba(99,102,241,0.2)';
+            const activeColor = 'var(--accent-light)';
             
             return (
               <button
@@ -99,7 +122,7 @@ export default function PassportApp() {
                   alignItems: 'center', 
                   gap: '12px',
                   padding: '10px 14px', 
-                  borderRadius: '8px', 
+                  borderRadius: 'var(--radius-md)', 
                   background: isActive ? activeBg : 'transparent',
                   border: '1px solid', 
                   borderColor: isActive ? activeBorder : 'transparent',
@@ -189,7 +212,10 @@ export default function PassportApp() {
               flex: 1,
               minHeight: currentRoute === 'research' ? '100%' : 'auto', 
               height: currentRoute === 'research' ? '100%' : 'auto',
-              padding: currentRoute === 'research' ? '0' : '32px 48px',
+              padding: currentRoute === 'research' ? '0' : '28px 40px',
+              maxWidth: currentRoute === 'research' ? 'none' : '1280px',
+              margin: currentRoute === 'research' ? '0' : '0 auto',
+              width: '100%',
               overflow: currentRoute === 'research' ? 'hidden' : 'visible'
             }}
           >

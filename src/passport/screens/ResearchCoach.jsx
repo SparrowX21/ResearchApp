@@ -30,7 +30,7 @@ const INITIAL_STATE = {
 };
 
 export default function ResearchCoach() {
-  const { currentUser, updateResearchState } = useAuth();
+  const { currentUser, updateResearchState, cloudStatus } = useAuth();
   
   // Local state initialized from currentUser's synced researchState or INITIAL_STATE
   const [appState, setAppState] = useState(() => {
@@ -136,13 +136,15 @@ export default function ResearchCoach() {
         {saveStatus === 'saved' && (
           <>
             <Check size={12} color="var(--green)" />
-            <span style={{ color: 'var(--green)' }}>Saved to cloud</span>
+            <span style={{ color: 'var(--green)' }}>
+              {cloudStatus.mode === 'cloud' ? 'Saved to cloud' : 'Saved locally'}
+            </span>
           </>
         )}
         {saveStatus === 'error' && (
           <>
             <Cloud size={12} color="var(--red)" />
-            <span style={{ color: 'var(--red)' }}>Offline (Local)</span>
+            <span style={{ color: 'var(--red)' }}>Save failed</span>
           </>
         )}
       </div>

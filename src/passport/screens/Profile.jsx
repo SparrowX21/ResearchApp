@@ -5,7 +5,7 @@ import {
   Upload, Trash2, Download, CloudLightning, ShieldAlert, Sparkles, CheckCircle2 
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { supabase } from '../../config/supabase';
+import { uploadDocument, deleteDocument, isVaultAvailable } from '../../services/documentVault';
 
 export default function Profile() {
   const { currentUser, updateStudentData } = useAuth();
@@ -50,38 +50,11 @@ export default function Profile() {
     }, 150);
 
     try {
-      // Check if Supabase URL is the default placeholder or invalid
-      const isConfigured = 
-        import.meta.env.VITE_SUPABASE_URL && 
-        import.meta.env.VITE_SUPABASE_URL !== 'your_supabase_url';
-
-      if (!isConfigured) {
-        throw new Error("Supabase is not configured yet. Simulating vault upload...");
+      if (!isVaultAvailable()) {
+        throw new Error('vault_unavailable');
       }
 
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${currentUser.id || 'anonymous'}/${Date.now()}_${file.name}`;
-
-      // Upload to 'documents' bucket
-      const { data, error } = await supabase.storage
-        .from('documents')
-        .upload(fileName, file, { cacheControl: '3600', upsert: true });
-
-      if (error) throw error;
-
-      // Obtain download URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('documents')
-        .getPublicUrl(fileName);
-
-      const newDoc = {
-        name: file.name,
-        size: (file.size / 1024).toFixed(1) + ' KB',
-        uploadedAt: new Date().toLocaleDateString(),
-        url: publicUrl,
-        path: fileName
-      };
-
+      const newDoc = await uploadDocument(currentUser.id, file);
       const updatedDocs = [...(studentData.documents || []), newDoc];
       await updateStudentData({ documents: updatedDocs });
 
@@ -113,17 +86,9 @@ export default function Profile() {
 
   const handleDeleteFile = async (docToDelete) => {
     try {
-      const isConfigured = 
-        import.meta.env.VITE_SUPABASE_URL && 
-        import.meta.env.VITE_SUPABASE_URL !== 'your_supabase_url';
-
-      if (isConfigured && !docToDelete.path.startsWith('mock-')) {
-        await supabase.storage
-          .from('documents')
-          .remove([docToDelete.path]);
-      }
+      await deleteDocument(docToDelete.path);
     } catch (e) {
-      console.error("Supabase file deletion failed:", e);
+      console.error('Cloud file deletion failed:', e);
     }
 
     const updatedDocs = (studentData.documents || []).filter(doc => doc.path !== docToDelete.path);

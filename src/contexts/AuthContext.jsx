@@ -1,7 +1,16 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback } from 'react';
 import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
 import { auth, googleProvider } from '../config/firebase';
-import { supabase } from '../config/supabase';
+import { isFirebaseConfigured, isSupabaseConfigured, isCloudFullyConfigured } from '../config/appConfig';
+import { linkFirebaseToSupabase, signOutSupabase } from '../services/supabaseAuth';
+import {
+  fetchUserById,
+  createUserProfile,
+  updateStudentDataInCloud,
+  updateResearchStateInCloud,
+} from '../services/userCloud';
+import { buildNewUserFromFirebase } from '../lib/userMapper';
+import { DEFAULT_STUDENT_DATA, INITIAL_RESEARCH_STATE } from './userDefaults';
 
 const AuthContext = createContext();
 
@@ -11,228 +20,227 @@ export const useAuth = () => {
   return context;
 };
 
-const INITIAL_RESEARCH_STATE = {
-  currentStage: 0,
-  completedStages: [],
-  topic: '',
-  researchQuestion: '',
-  thesis: '',
-  thesisScores: { clarity: 0, arguability: 0, specificity: 0, sophistication: 0, feedback: '' },
-  researchPlan: null,
-  sources: [],
-  outline: [],
-  draft: '',
-  revisionFeedback: null,
-};
+const MOCK_STORAGE_KEY = 'edusuite_mock_user';
 
-const DEFAULT_STUDENT_DATA = {
-  name: 'Demo Student',
-  grade: '11th Grade',
-  school: 'Academic Prep High',
-  gpa: '4.00',
-  targetMajor: 'Computer Science & AI',
-  bio: 'Passionate student interested in machine learning ethics, independent research, and high school computer science pathways.',
-  skills: [
-    { id: 1, name: 'Python Programming', category: 'Technical', proficiency: 'Advanced' },
-    { id: 2, name: 'Academic Research Methods', category: 'Research', proficiency: 'Intermediate' }
-  ],
-  courses: [
-    { id: 1, name: 'AP Computer Science A', grade: 'A', type: 'AP' },
-    { id: 2, name: 'Honors Pre-Calculus', grade: 'A', type: 'Honors' }
-  ],
-  projects: [],
-  competitions: 0,
-  extracurriculars: [],
-  volunteerLogs: [],
-  completedMilestones: [],
-  colleges: [],
-  interests: ['technology'],
-  documents: []
-};
+function getLocalUserKey(email) {
+  return `edusuite_user_${email}`;
+}
+
+function saveLocalUser(user) {
+  if (!user?.email) return;
+  localStorage.setItem(getLocalUserKey(user.email), JSON.stringify(user));
+}
+
+function loadLocalUser(email) {
+  const raw = localStorage.getItem(getLocalUserKey(email));
+  return raw ? JSON.parse(raw) : null;
+}
 
 export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [cloudStatus, setCloudStatus] = useState({
+    firebase: isFirebaseConfigured,
+    supabase: isSupabaseConfigured,
+    linked: false,
+    mode: 'local',
+  });
+
+  const persistLocal = useCallback((user) => {
+    if (!user) return;
+    if (!isFirebaseConfigured) {
+      localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(user));
+    } else if (user.email) {
+      saveLocalUser(user);
+    }
+  }, []);
+
+  const hydrateUserFromCloud = useCallback(async (firebaseUser) => {
+    const link = await linkFirebaseToSupabase(firebaseUser);
+    const linked = link.ok;
+
+    setCloudStatus({
+      firebase: true,
+      supabase: isSupabaseConfigured,
+      linked,
+      mode: linked && isSupabaseConfigured ? 'cloud' : 'local',
+    });
+
+    if (!isSupabaseConfigured) {
+      const local = loadLocalUser(firebaseUser.email);
+      const user =
+        local ||
+        buildNewUserFromFirebase(firebaseUser);
+      persistLocal(user);
+      setCurrentUser(user);
+      return;
+    }
+
+    if (!linked) {
+      console.warn(
+        'Cloud database requires Firebase provider in Supabase. Using local backup. See docs/CLOUD_SETUP.md'
+      );
+      const local = loadLocalUser(firebaseUser.email);
+      const user = local || buildNewUserFromFirebase(firebaseUser);
+      persistLocal(user);
+      setCurrentUser(user);
+      return;
+    }
+
+    const { user: existing, error: fetchError } = await fetchUserById(firebaseUser.uid);
+
+    if (existing) {
+      persistLocal(existing);
+      setCurrentUser(existing);
+      return;
+    }
+
+    if (fetchError) {
+      console.warn('Cloud fetch failed, using local backup:', fetchError.message || fetchError);
+      const local = loadLocalUser(firebaseUser.email);
+      const user = local || buildNewUserFromFirebase(firebaseUser);
+      persistLocal(user);
+      setCurrentUser(user);
+      return;
+    }
+
+    const { user: created, error: createError } = await createUserProfile(firebaseUser);
+
+    if (createError) {
+      console.warn('Cloud profile create failed:', createError.message);
+      const local = loadLocalUser(firebaseUser.email) || buildNewUserFromFirebase(firebaseUser);
+      persistLocal(local);
+      setCurrentUser(local);
+      return;
+    }
+
+    persistLocal(created);
+    setCurrentUser(created);
+  }, [persistLocal]);
 
   useEffect(() => {
-    // 1. If Firebase Auth is not configured, load persistent mock user
-    if (!auth) {
-      const savedMockUser = localStorage.getItem('edusuite_mock_user');
-      if (savedMockUser) {
-        setCurrentUser(JSON.parse(savedMockUser));
-      }
+    if (!isFirebaseConfigured) {
+      const saved = localStorage.getItem(MOCK_STORAGE_KEY);
+      if (saved) setCurrentUser(JSON.parse(saved));
+      setCloudStatus({
+        firebase: false,
+        supabase: isSupabaseConfigured,
+        linked: false,
+        mode: 'local',
+      });
       setLoading(false);
       return;
     }
 
-    // 2. Listen for Firebase Auth state changes
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        await syncUserWithSupabase(firebaseUser);
-      } else {
-        setCurrentUser(null);
+      try {
+        if (firebaseUser) {
+          await hydrateUserFromCloud(firebaseUser);
+        } else {
+          setCurrentUser(null);
+          setCloudStatus({
+            firebase: true,
+            supabase: isSupabaseConfigured,
+            linked: false,
+            mode: 'local',
+          });
+        }
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return unsubscribe;
-  }, []);
-
-  const syncUserWithSupabase = async (firebaseUser) => {
-    try {
-      if (!supabase) {
-        throw new Error("Supabase unconfigured");
-      }
-
-      const { data: userRecord, error: fetchError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', firebaseUser.uid)
-        .single();
-
-      if (userRecord) {
-        setCurrentUser(userRecord);
-      } else {
-        // Create new user record
-        const newUser = {
-          id: firebaseUser.uid,
-          email: firebaseUser.email,
-          name: firebaseUser.displayName || 'Student',
-          picture: firebaseUser.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Demo',
-          studentData: {
-            ...DEFAULT_STUDENT_DATA,
-            name: firebaseUser.displayName || 'Student',
-          },
-          researchState: INITIAL_RESEARCH_STATE
-        };
-
-        const { data: createdUser, error: insertError } = await supabase
-          .from('users')
-          .insert([newUser])
-          .select()
-          .single();
-
-        if (insertError) throw insertError;
-        setCurrentUser(createdUser);
-      }
-    } catch (e) {
-      console.warn('Supabase sync bypassed. Running in Simulated Local Mode:', e.message);
-      
-      // Load or create persistent mock profile linked to this email
-      const localKey = `edusuite_user_${firebaseUser.email}`;
-      const saved = localStorage.getItem(localKey);
-      if (saved) {
-        setCurrentUser(JSON.parse(saved));
-      } else {
-        const mockUser = {
-          id: firebaseUser.uid,
-          email: firebaseUser.email,
-          name: firebaseUser.displayName || 'Student',
-          picture: firebaseUser.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Demo',
-          studentData: {
-            ...DEFAULT_STUDENT_DATA,
-            name: firebaseUser.displayName || 'Student',
-          },
-          researchState: INITIAL_RESEARCH_STATE
-        };
-        localStorage.setItem(localKey, JSON.stringify(mockUser));
-        setCurrentUser(mockUser);
-      }
-    }
-  };
+  }, [hydrateUserFromCloud]);
 
   const loginWithGoogle = async () => {
-    try {
-      if (!auth) {
-        throw new Error("auth/invalid-api-key");
-      }
-      await signInWithPopup(auth, googleProvider);
-    } catch (error) {
-      console.warn('Bypassing Google Sign In to Local Simulated session:', error.message);
-      
-      // Load last mock session or initialize default
-      const savedMockUser = localStorage.getItem('edusuite_mock_user');
-      if (savedMockUser) {
-        setCurrentUser(JSON.parse(savedMockUser));
-      } else {
-        const mockUser = {
-          id: 'mock-student-123',
-          email: 'demo.student@edusuite.ai',
-          name: 'Demo Student (Mock)',
-          picture: 'https://api.dicebear.com/7.x/avataaars/svg?seed=EduSuite',
-          studentData: DEFAULT_STUDENT_DATA,
-          researchState: INITIAL_RESEARCH_STATE
-        };
-        localStorage.setItem('edusuite_mock_user', JSON.stringify(mockUser));
-        setCurrentUser(mockUser);
-      }
+    if (!auth) {
+      const saved = localStorage.getItem(MOCK_STORAGE_KEY);
+      const mockUser = saved
+        ? JSON.parse(saved)
+        : {
+            id: 'mock-student-123',
+            email: 'demo.student@edusuite.ai',
+            name: 'Demo Student',
+            picture: 'https://api.dicebear.com/7.x/avataaars/svg?seed=EduSuite',
+            studentData: DEFAULT_STUDENT_DATA,
+            researchState: INITIAL_RESEARCH_STATE,
+          };
+      localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(mockUser));
+      setCurrentUser(mockUser);
+      setCloudStatus({ firebase: false, supabase: false, linked: false, mode: 'local' });
+      return;
     }
+
+    await signInWithPopup(auth, googleProvider);
   };
 
   const logout = async () => {
-    try {
-      if (auth) {
+    await signOutSupabase();
+    if (auth) {
+      try {
         await signOut(auth);
+      } catch (error) {
+        console.error('Sign out error:', error);
       }
-    } catch (error) {
-      console.error('Sign Out Error:', error);
     }
-    // Clean up local mock sessions too
-    localStorage.removeItem('edusuite_mock_user');
+    localStorage.removeItem(MOCK_STORAGE_KEY);
     setCurrentUser(null);
+    setCloudStatus({
+      firebase: isFirebaseConfigured,
+      supabase: isSupabaseConfigured,
+      linked: false,
+      mode: 'local',
+    });
   };
 
   const updateStudentData = async (updates) => {
     if (!currentUser) return;
+
     const updatedStudentData = { ...currentUser.studentData, ...updates };
     const updatedUser = { ...currentUser, studentData: updatedStudentData };
-    
+
     setCurrentUser(updatedUser);
+    persistLocal(updatedUser);
 
-    // Save to localStorage for persistent mock testing
-    if (!auth) {
-      localStorage.setItem('edusuite_mock_user', JSON.stringify(updatedUser));
-    } else {
-      localStorage.setItem(`edusuite_user_${currentUser.email}`, JSON.stringify(updatedUser));
-    }
-
-    try {
-      if (!supabase) return;
-      await supabase
-        .from('users')
-        .update({ studentData: updatedStudentData })
-        .eq('id', currentUser.id);
-    } catch (error) {
-      console.error('Failed to update studentData in Supabase:', error);
+    if (cloudStatus.mode === 'cloud' && isSupabaseConfigured) {
+      const { error } = await updateStudentDataInCloud(currentUser.id, updatedStudentData);
+      if (error) {
+        console.error('Failed to sync profile to cloud:', error.message);
+        throw error;
+      }
     }
   };
 
   const updateResearchState = async (newState) => {
     if (!currentUser) return;
+
     const updatedUser = { ...currentUser, researchState: newState };
-    
     setCurrentUser(updatedUser);
+    persistLocal(updatedUser);
 
-    // Save to localStorage for persistent mock testing
-    if (!auth) {
-      localStorage.setItem('edusuite_mock_user', JSON.stringify(updatedUser));
-    } else {
-      localStorage.setItem(`edusuite_user_${currentUser.email}`, JSON.stringify(updatedUser));
-    }
-
-    try {
-      if (!supabase) return;
-      await supabase
-        .from('users')
-        .update({ researchState: newState })
-        .eq('id', currentUser.id);
-    } catch (error) {
-      console.error('Failed to update researchState in Supabase:', error);
+    if (cloudStatus.mode === 'cloud' && isSupabaseConfigured) {
+      const { error } = await updateResearchStateInCloud(currentUser.id, newState);
+      if (error) {
+        console.error('Failed to sync research state to cloud:', error.message);
+        throw error;
+      }
     }
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, loading, loginWithGoogle, logout, updateStudentData, updateResearchState }}>
+    <AuthContext.Provider
+      value={{
+        currentUser,
+        loading,
+        cloudStatus,
+        isCloudFullyConfigured,
+        loginWithGoogle,
+        logout,
+        updateStudentData,
+        updateResearchState,
+      }}
+    >
       {!loading && children}
     </AuthContext.Provider>
   );
